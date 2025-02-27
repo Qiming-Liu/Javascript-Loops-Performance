@@ -12,7 +12,7 @@ function testLoopsPerformance() {
         start = performance.now();
         callback();
         const duration = (performance.now() - start).toFixed(2);
-        results.push(`${label}, ${duration} ms`);
+        results.push(`${label}, ${duration}`);
     }
 
     benchmark("for", () => {
@@ -67,8 +67,8 @@ function testLoopsPerformance() {
         sum = arr.reduce((acc, value) => acc + value, 0);
     });
 
-    // Write results to a text file
-    fs.writeFileSync(`performance-results.txt`, results.join("\n"));
+    // Ensure the last newline is removed, and data is properly formatted
+    fs.writeFileSync(`performance-results.txt`, results.join("\n") + "\n");
 }
 
 testLoopsPerformance();
