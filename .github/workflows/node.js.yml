@@ -1,4 +1,4 @@
-name: Test JavaScript Loops Performance
+name: Update README with Performance Test Results
 
 on:
   push:
@@ -10,12 +10,13 @@ on:
   workflow_dispatch:
 
 jobs:
-  test-loops:
+  update-readme:
     runs-on: ubuntu-latest
     strategy:
       matrix:
         node-version: [16, 18, 20] # Run on multiple Node.js versions
-    name: Run on Node.js ${{ matrix.node-version }}
+
+    name: Run and Update README on Node.js ${{ matrix.node-version }}
 
     steps:
       - name: Checkout repository
@@ -26,5 +27,21 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
 
-      - name: Run JavaScript loop performance test
-        run: node index.js
+      - name: Install dependencies
+        run: npm install # If dependencies are needed
+
+      - name: Run JavaScript loop performance test and save output
+        run: node index.js > performance-results.txt
+
+      - name: Update README with new performance results
+        run: |
+          echo "## JavaScript Loop Performance Test Results" > README.md
+          echo "### Node.js version: ${{ matrix.node-version }}" >> README.md
+          cat performance-results.txt >> README.md
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          git add README.md
+          git commit -m "Update README with latest loop performance results"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
