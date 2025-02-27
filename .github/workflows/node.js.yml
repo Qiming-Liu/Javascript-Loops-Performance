@@ -27,11 +27,8 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
 
-      - name: Install dependencies
-        run: npm install # Skip if no dependencies are needed
-
       - name: Run JavaScript loop performance test and save output
-        run: node test-loops.js > performance-results-${{ matrix.node-version }}.txt
+        run: node index.js > performance-results-${{ matrix.node-version }}.txt
 
       - name: Upload performance test results
         uses: actions/upload-artifact@v4
