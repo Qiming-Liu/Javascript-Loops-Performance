@@ -10,7 +10,7 @@ on:
   workflow_dispatch: # Allow manual execution
 
 jobs:
-  update-readme:
+  run-js:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -41,7 +41,7 @@ jobs:
 
   update-readme:
     runs-on: ubuntu-latest
-    needs: update-readme
+    needs: run-js
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
