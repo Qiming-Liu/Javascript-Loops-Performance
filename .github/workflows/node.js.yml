@@ -7,7 +7,7 @@ on:
   pull_request:
     branches:
       - main
-  workflow_dispatch:
+  workflow_dispatch: # Allow manual execution
 
 jobs:
   update-readme:
@@ -28,20 +28,53 @@ jobs:
           node-version: ${{ matrix.node-version }}
 
       - name: Install dependencies
-        run: npm install # If dependencies are needed
+        run: npm install # Skip if no dependencies are needed
 
       - name: Run JavaScript loop performance test and save output
-        run: node index.js > performance-results.txt
+        run: node test-loops.js > performance-results-${{ matrix.node-version }}.txt
 
-      - name: Update README with new performance results
+      - name: Save results for later use
+        uses: actions/upload-artifact@v3
+        with:
+          name: performance-results
+          path: performance-results-${{ matrix.node-version }}.txt
+
+  update-readme:
+    runs-on: ubuntu-latest
+    needs: update-readme
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all test results
+        uses: actions/download-artifact@v3
+        with:
+          name: performance-results
+
+      - name: Generate Markdown table for README
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "## JavaScript Loop Performance Test Results" > README.md
-          echo "### Node.js version: ${{ matrix.node-version }}" >> README.md
-          cat performance-results.txt >> README.md
+          echo "### The code is all AI generated" > README.md
+          echo "" >> README.md
+          echo "| Node.js Version | for | for...in | for...of | forEach | while | do...while | map | filter | reduce |" >> README.md
+          echo "|----------------|-----|---------|--------|--------|-------|----------|-----|--------|--------|" >> README.md
+
+          for version in 16 18 20; do
+            results=$(cat performance-results-$version.txt | awk '{print $NF}')
+            echo "| $version | $results |" >> README.md
+          done
+
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
           git add README.md
-          git commit -m "Update README with latest loop performance results"
+          
+          # Check if there are any changes
+          if git diff --staged --quiet; then
+            echo "No changes to commit. Exiting..."
+            exit 0
+          fi
+          
+          git commit -m "Update README with latest loop performance results [skip ci]"
           git push
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
