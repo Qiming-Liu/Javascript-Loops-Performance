@@ -46,18 +46,23 @@ jobs:
       - name: Download all test results
         uses: actions/download-artifact@v4
 
-      - name: Generate Markdown table for README
+      - name: Generate Markdown table for README (Sorted Columns)
         run: |
           echo "## JavaScript Loop Performance Test Results" > README.md
           echo "" >> README.md
-          echo "| Node.js Version | for | for...in | for...of | forEach | while | do...while | map | filter | reduce |" >> README.md
-          echo "|----------------|-----|---------|--------|--------|-------|----------|-----|--------|--------|" >> README.md
+          echo "**Unit: ms, lower is better.**" >> README.md
+          echo "" >> README.md
+          echo "| Node.js Version | do...while | while | for | map | reduce | filter | forEach | for...of | for...in |" >> README.md
+          echo "|----------------|-----------|-------|-----|-----|--------|--------|---------|---------|---------|" >> README.md
 
           for version in 16 18 20; do
             row="| $version |"
+            declare -A loop_times
             while IFS=, read -r loop time; do
-              row="$row $(echo $time | xargs) |"
+              loop_times[$loop]=$(echo $time | xargs)
             done < performance-results-${version}/performance-results-${version}.txt
+
+            row="$row ${loop_times[do...while]} | ${loop_times[while]} | ${loop_times[for]} | ${loop_times[map]} | ${loop_times[reduce]} | ${loop_times[filter]} | ${loop_times[forEach]} | ${loop_times[for...of]} | ${loop_times[for...in]} |"
             echo "$row" >> README.md
           done
 

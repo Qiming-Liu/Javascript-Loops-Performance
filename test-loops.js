@@ -15,28 +15,13 @@ function testLoopsPerformance() {
         results.push(`${label}, ${duration}`);
     }
 
-    benchmark("for", () => {
-        for (let i = 0; i < arr.length; i++) {
+    // Run each loop test and record the time
+    benchmark("do...while", () => {
+        let i = 0;
+        do {
             sum += arr[i];
-        }
-    });
-
-    benchmark("for...in", () => {
-        for (let i in arr) {
-            sum += arr[i];
-        }
-    });
-
-    benchmark("for...of", () => {
-        for (let value of arr) {
-            sum += value;
-        }
-    });
-
-    benchmark("forEach", () => {
-        arr.forEach(value => {
-            sum += value;
-        });
+            i++;
+        } while (i < arr.length);
     });
 
     benchmark("while", () => {
@@ -47,27 +32,43 @@ function testLoopsPerformance() {
         }
     });
 
-    benchmark("do...while", () => {
-        let i = 0;
-        do {
+    benchmark("for", () => {
+        for (let i = 0; i < arr.length; i++) {
             sum += arr[i];
-            i++;
-        } while (i < arr.length);
+        }
     });
 
     benchmark("map", () => {
         arr.map(value => value * 2);
     });
 
-    benchmark("filter", () => {
-        arr.filter(value => value % 2 === 0);
-    });
-
     benchmark("reduce", () => {
         sum = arr.reduce((acc, value) => acc + value, 0);
     });
 
-    // Ensure the last newline is removed, and data is properly formatted
+    benchmark("filter", () => {
+        arr.filter(value => value % 2 === 0);
+    });
+
+    benchmark("forEach", () => {
+        arr.forEach(value => {
+            sum += value;
+        });
+    });
+
+    benchmark("for...of", () => {
+        for (let value of arr) {
+            sum += value;
+        }
+    });
+
+    benchmark("for...in", () => {
+        for (let i in arr) {
+            sum += arr[i];
+        }
+    });
+
+    // Write results to a text file in proper CSV format
     fs.writeFileSync(`performance-results.txt`, results.join("\n") + "\n");
 }
 
