@@ -27,6 +27,9 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
 
+      - name: Run JavaScript loop performance test
+        run: node loopsVSfunctions.js
+        
       - name: Run JavaScript loop performance test and save output
         run: node test-loops.js && mv performance-results.txt performance-results-${{ matrix.node-version }}.txt
 
