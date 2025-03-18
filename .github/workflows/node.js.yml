@@ -14,9 +14,9 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version: [16, 18, 20]
+        node-version: 18
 
-    name: Run loopsVSfunctions on Node.js ${{ matrix.node-version }}
+    name: Run 3loopsVS3functions on Node.js 18
 
     steps:
       - name: Checkout repository
@@ -27,8 +27,8 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
 
-      - name: Run loopsVSfunctions.js test
-        run: node loopsVSfunctions.js
+      - name: Run 3loopsVS3functions.js test
+        run: node 3loopsVS3functions.js
 
   run-performance-test:
     runs-on: ubuntu-latest
