@@ -12,20 +12,17 @@ on:
 jobs:
   run-loops-vs-functions:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node-version: 18
-
+    
     name: Run 3loopsVS3functions on Node.js 18
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Node.js ${{ matrix.node-version }}
+      - name: Set up Node.js 18
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: 18
 
       - name: Run 3loopsVS3functions.js test
         run: node 3loopsVS3functions.js
