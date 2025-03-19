@@ -10,30 +10,13 @@ on:
   workflow_dispatch:
 
 jobs:
-  run-loops-vs-functions:
-    runs-on: ubuntu-latest
-    
-    name: Run 3loopsVS3functions on Node.js 18
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js 18
-        uses: actions/setup-node@v4
-        with:
-          node-version: 18
-
-      - name: Run 3loopsVS3functions.js test
-        run: node 3loopsVS3functions.js
-
   run-performance-test:
     runs-on: ubuntu-latest
     strategy:
       matrix:
         node-version: [16, 18, 20]
 
-    name: Run test-loops.js on Node.js ${{ matrix.node-version }}
+    name: Run on Node.js ${{ matrix.node-version }}
 
     steps:
       - name: Checkout repository
@@ -44,7 +27,7 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
 
-      - name: Run JavaScript loop performance test
+      - name: Run JavaScript loop performance test and save output
         run: node test-loops.js && mv performance-results.txt performance-results-${{ matrix.node-version }}.txt
 
       - name: Upload performance test results
