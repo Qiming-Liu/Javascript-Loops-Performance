@@ -16,6 +16,9 @@ jobs:
       matrix:
         node-version: [18, 20, 22, 24]
 
+    outputs:
+      versions: ${{ steps.set-versions.outputs.versions }}
+
     name: Run on Node.js ${{ matrix.node-version }}
 
     steps:
@@ -36,6 +39,13 @@ jobs:
           name: performance-results-${{ matrix.node-version }}
           path: performance-results-${{ matrix.node-version }}.txt
 
+      # ✅ only run once to set the versions list (not per matrix run)
+      - name: Set versions output
+        id: set-versions
+        if: ${{ matrix.node-version == 18 }} # pick one job to output
+        run: |
+          echo "versions=[18,20,22,24]" >> $GITHUB_OUTPUT
+
   update-readme:
     runs-on: ubuntu-latest
     needs: run-performance-test
@@ -46,8 +56,9 @@ jobs:
       - name: Download all test results
         uses: actions/download-artifact@v4
 
-      - name: Generate Markdown table for README (Sorted Columns)
+      - name: Generate Markdown table for README
         run: |
+          versions='${{ needs.run-performance-test.outputs.versions }}'
           echo "## JavaScript Loop Performance Test Results" > README.md
           echo "" >> README.md
           echo "**Unit: ms, lower is better.**" >> README.md
@@ -55,7 +66,7 @@ jobs:
           echo "| Node.js Version | do...while | while | for | map | reduce | filter | forEach | for...of | for...in |" >> README.md
           echo "|----------------|-----------|-------|-----|-----|--------|--------|---------|---------|---------|" >> README.md
 
-          for version in 16 18 20; do
+          for version in $(echo $versions | jq -r '.[]'); do
             row="| $version |"
             declare -A loop_times
             while IFS=, read -r loop time; do
@@ -72,7 +83,6 @@ jobs:
           git config --global user.email "github-actions@github.com"
           git add README.md
           
-          # Check if there are any changes before committing
           if git diff --staged --quiet; then
             echo "No changes to commit. Exiting..."
             exit 0
