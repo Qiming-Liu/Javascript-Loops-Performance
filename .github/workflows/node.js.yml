@@ -18,12 +18,14 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
 
-      - name: Run Test
+      - name: Run Performance Test
         run: |
+          # The test script should output results in 'key: value' format
           node test-loops.js
           mv performance-results.txt result-${{ matrix.node-version }}.txt
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload Results
+        uses: actions/upload-artifact@v4
         with:
           name: results-${{ matrix.node-version }}
           path: result-${{ matrix.node-version }}.txt
@@ -34,60 +36,64 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - name: Download Results
+      - name: Download All Artifacts
         uses: actions/download-artifact@v4
         with:
           path: all-results
 
-      - name: Overwrite README with New Table
+      - name: Overwrite README with New Data
         shell: python
         run: |
           import os
 
-          # 1. 采集所有已下载的版本数据
+          # 1. Collect all data from downloaded artifacts
           results_map = {}
           metrics = ["do...while", "while", "for", "map", "reduce", "filter", "forEach", "for...of", "for...in"]
           base_path = "all-results"
           
-          # 遍历所有下载的 artifact 目录
-          for folder in os.listdir(base_path):
-              version = folder.replace("results-", "")
-              file_path = os.path.join(base_path, folder, f"result-{version}.txt")
-              if os.path.exists(file_path):
-                  with open(file_path, "r") as f:
-                      # 兼容冒号或逗号分隔符，提取 key 和 value
+          if os.path.exists(base_path):
+              for folder in os.listdir(base_path):
+                  # Extract version from folder name
+                  version = folder.replace("results-", "")
+                  file_path = os.path.join(base_path, folder, f"result-{version}.txt")
+                  
+                  if os.path.exists(file_path):
                       data = {}
-                      for line in f:
-                          if ":" in line or "," in line:
-                              parts = line.replace(":", ",").split(",")
-                              if len(parts) >= 2:
-                                  data[parts[0].strip()] = parts[1].strip()
+                      with open(file_path, "r") as f:
+                          for line in f:
+                              if ":" in line:
+                                  key, val = line.split(":", 1)
+                                  # Round the value to ensure integer format
+                                  try:
+                                      data[key.strip()] = str(round(float(val.strip())))
+                                  except:
+                                      data[key.strip()] = val.strip()
+                      
                       results_map[version] = [data.get(m, "N/A") for m in metrics]
 
-          # 2. 生成全新的 Markdown 内容
+          # 2. Construct the new Markdown content (Total Overwrite)
           title = "# JavaScript Loop Performance Test Results\n\n"
-          description = "> 测试单位: 毫秒 (ms)，数值越低性能越好。每次测试由 GitHub Actions 自动生成并覆盖此文件。\n\n"
+          desc = "> **Unit:** milliseconds (ms). **Lower is better.** Generated automatically via GitHub Actions.\n\n"
           
           header = "| Node.js | " + " | ".join(metrics) + " |\n"
           sep = "|---| " + "---| " * len(metrics) + "\n"
           
           rows = ""
-          # 按 Node 版本数值大小排序
+          # Sort versions numerically for the table
           sorted_versions = sorted(results_map.keys(), key=lambda x: int(x))
           for v in sorted_versions:
               rows += f"| {v} | " + " | ".join(results_map[v]) + " |\n"
           
-          full_content = title + description + header + sep + rows
+          full_content = title + desc + header + sep + rows
 
-          # 3. 彻底覆盖写入 README.md ("w" 模式会删除文件原内容)
+          # 3. Write to README.md (mode 'w' overwrites everything)
           with open("README.md", "w", encoding="utf-8") as f:
               f.write(full_content)
 
-      - name: Commit and Push
+      - name: Commit and Push Changes
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add README.md
-          # 即使内容没变也不报错
-          git commit -m "docs: complete rewrite of README with latest results" || exit 0
+          git commit -m "docs: overwrite readme with latest performance results [skip ci]" || exit 0
           git push
