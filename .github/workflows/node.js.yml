@@ -20,7 +20,6 @@ jobs:
 
       - name: Run Performance Test
         run: |
-          # The test script should output results in 'key: value' format
           node test-loops.js
           mv performance-results.txt result-${{ matrix.node-version }}.txt
 
@@ -46,54 +45,53 @@ jobs:
         run: |
           import os
 
-          # 1. Collect all data from downloaded artifacts
           results_map = {}
-          metrics = ["do...while", "while", "for", "map", "reduce", "filter", "forEach", "for...of", "for...in"]
+          all_metrics = []
           base_path = "all-results"
           
+          # 1. Dynamically collect results
           if os.path.exists(base_path):
-              for folder in os.listdir(base_path):
-                  # Extract version from folder name
+              for folder in sorted(os.listdir(base_path)):
                   version = folder.replace("results-", "")
                   file_path = os.path.join(base_path, folder, f"result-{version}.txt")
                   
                   if os.path.exists(file_path):
-                      data = {}
                       with open(file_path, "r") as f:
+                          data = {}
                           for line in f:
                               if ":" in line:
-                                  key, val = line.split(":", 1)
-                                  # Round the value to ensure integer format
-                                  try:
-                                      data[key.strip()] = str(round(float(val.strip())))
-                                  except:
-                                      data[key.strip()] = val.strip()
-                      
-                      results_map[version] = [data.get(m, "N/A") for m in metrics]
+                                  k, v = line.split(":", 1)
+                                  metric_name = k.strip()
+                                  data[metric_name] = v.strip()
+                                  if metric_name not in all_metrics:
+                                      all_metrics.append(metric_name)
+                          results_map[version] = data
 
-          # 2. Construct the new Markdown content (Total Overwrite)
+          # 2. Build Markdown content
           title = "# JavaScript Loop Performance Test Results\n\n"
-          desc = "> **Unit:** milliseconds (ms). **Lower is better.** Generated automatically via GitHub Actions.\n\n"
+          desc = "> **Unit:** milliseconds (ms). **Lower is better.** Rounded to nearest integer.\n\n"
           
-          header = "| Node.js | " + " | ".join(metrics) + " |\n"
-          sep = "|---| " + "---| " * len(metrics) + "\n"
+          # Table Headers
+          header = "| Node.js | " + " | ".join(all_metrics) + " |\n"
+          sep = "|---| " + "---| " * len(all_metrics) + "\n"
           
+          # Table Rows
           rows = ""
-          # Sort versions numerically for the table
-          sorted_versions = sorted(results_map.keys(), key=lambda x: int(x))
-          for v in sorted_versions:
-              rows += f"| {v} | " + " | ".join(results_map[v]) + " |\n"
+          # Sort by version number
+          for v in sorted(results_map.keys(), key=lambda x: int(x)):
+              row = [v]
+              for m in all_metrics:
+                  row.append(results_map[v].get(m, "N/A"))
+              rows += "| " + " | ".join(row) + " |\n"
           
-          full_content = title + desc + header + sep + rows
-
-          # 3. Write to README.md (mode 'w' overwrites everything)
+          # 3. Complete Rewrite
           with open("README.md", "w", encoding="utf-8") as f:
-              f.write(full_content)
+              f.write(title + desc + header + sep + rows)
 
       - name: Commit and Push Changes
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add README.md
-          git commit -m "docs: overwrite readme with latest performance results [skip ci]" || exit 0
+          git commit -m "docs: update performance results [skip ci]" || exit 0
           git push
