@@ -1,75 +1,29 @@
 const fs = require('fs');
-const performance = require('perf_hooks').performance;
+const { performance } = require('perf_hooks');
 
-function testLoopsPerformance() {
-    const arr = Array.from({ length: 10_000_000 }, (_, i) => i);
-    let sum = 0;
-    let start;
-    const results = [];
+const size = 1000000; // 1M items
+const arr = Array.from({ length: size }, (_, i) => i);
+const results = {};
 
-    function benchmark(label, callback) {
-        sum = 0;
-        start = performance.now();
-        callback();
-        const duration = (performance.now() - start).toFixed(2);
-        results.push(`${label}, ${duration}`);
-    }
+// Simple benchmark wrapper
+const run = (name, fn) => {
+  const start = performance.now();
+  fn();
+  results[name] = Math.round(performance.now() - start);
+};
 
-    // Run each loop test and record the time
-    benchmark("do...while", () => {
-        let i = 0;
-        do {
-            sum += arr[i];
-            i++;
-        } while (i < arr.length);
-    });
+// Benchmarks using arrow functions
+run('do...while', () => { let i = 0, s = 0; do { s += arr[i++]; } while (i < size); });
+run('while',     () => { let i = 0, s = 0; while (i < size) { s += arr[i++]; } });
+run('for',       () => { let s = 0; for (let i = 0; i < size; i++) { s += arr[i]; } });
+run('map',       () => { let s = 0; arr.map(x => s += x); });
+run('reduce',    () => arr.reduce((s, x) => s + x, 0));
+run('filter',    () => { let s = 0; arr.filter(x => { s += x; return true; }); });
+run('forEach',   () => { let s = 0; arr.forEach(x => s += x); });
+run('for...of',  () => { let s = 0; for (const x of arr) { s += x; } });
+run('for...in',  () => { let s = 0; for (const i in arr) { s += arr[i]; } });
 
-    benchmark("while", () => {
-        let i = 0;
-        while (i < arr.length) {
-            sum += arr[i];
-            i++;
-        }
-    });
-
-    benchmark("for", () => {
-        for (let i = 0; i < arr.length; i++) {
-            sum += arr[i];
-        }
-    });
-
-    benchmark("map", () => {
-        arr.map(value => value * 2);
-    });
-
-    benchmark("reduce", () => {
-        sum = arr.reduce((acc, value) => acc + value, 0);
-    });
-
-    benchmark("filter", () => {
-        arr.filter(value => value % 2 === 0);
-    });
-
-    benchmark("forEach", () => {
-        arr.forEach(value => {
-            sum += value;
-        });
-    });
-
-    benchmark("for...of", () => {
-        for (let value of arr) {
-            sum += value;
-        }
-    });
-
-    benchmark("for...in", () => {
-        for (let i in arr) {
-            sum += arr[i];
-        }
-    });
-
-    // Write results to a text file in proper CSV format
-    fs.writeFileSync(`performance-results.txt`, results.join("\n") + "\n");
-}
-
-testLoopsPerformance();
+// Output format: "name: value"
+fs.writeFileSync('performance-results.txt', 
+  Object.entries(results).map(([k, v]) => `${k}: ${v}`).join('\n')
+);
