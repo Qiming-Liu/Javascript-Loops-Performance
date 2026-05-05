@@ -2,11 +2,9 @@ name: Update README with Performance Test Results
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -14,13 +12,9 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version: [20, 22, 24, 25]
+        node-version: [12, 14, 16, 18, 20, 22, 24, 25, 26]
 
-    outputs:
-      versions: ${{ steps.set-versions.outputs.versions }}
-
-    name: Run on Node.js ${{ matrix.node-version }}
-
+    name: Node.js ${{ matrix.node-version }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -30,21 +24,16 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
 
-      - name: Run JavaScript loop performance test and save output
-        run: node test-loops.js && mv performance-results.txt performance-results-${{ matrix.node-version }}.txt
+      - name: Run test
+        run: |
+          node test-loops.js
+          mv performance-results.txt results-${{ matrix.node-version }}.txt
 
-      - name: Upload performance test results
+      - name: Upload results
         uses: actions/upload-artifact@v4
         with:
-          name: performance-results-${{ matrix.node-version }}
-          path: performance-results-${{ matrix.node-version }}.txt
-
-      # ✅ only run once to set the versions list (not per matrix run)
-      - name: Set versions output
-        id: set-versions
-        if: ${{ matrix.node-version == 18 }} # pick one job to output
-        run: |
-          echo "versions=[18,20,22,24]" >> $GITHUB_OUTPUT
+          name: results-${{ matrix.node-version }}
+          path: results-${{ matrix.node-version }}.txt
 
   update-readme:
     runs-on: ubuntu-latest
@@ -53,42 +42,57 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Download all test results
+      - name: Download all results
         uses: actions/download-artifact@v4
+        with:
+          path: all-results
 
-      - name: Generate Markdown table for README
+      - name: Generate Markdown Table
+        id: table-gen
         run: |
-          versions='${{ needs.run-performance-test.outputs.versions }}'
-          echo "## JavaScript Loop Performance Test Results" > README.md
-          echo "" >> README.md
-          echo "**Unit: ms, lower is better.**" >> README.md
-          echo "" >> README.md
-          echo "| Node.js Version | do...while | while | for | map | reduce | filter | forEach | for...of | for...in |" >> README.md
-          echo "|----------------|-----------|-------|-----|-----|--------|--------|---------|---------|---------|" >> README.md
-
-          for version in $(echo $versions | jq -r '.[]'); do
-            row="| $version |"
-            declare -A loop_times
-            while IFS=, read -r loop time; do
-              loop_times[$loop]=$(echo $time | xargs)
-            done < performance-results-${version}/performance-results-${version}.txt
-
-            row="$row ${loop_times[do...while]} | ${loop_times[while]} | ${loop_times[for]} | ${loop_times[map]} | ${loop_times[reduce]} | ${loop_times[filter]} | ${loop_times[forEach]} | ${loop_times[for...of]} | ${loop_times[for...in]} |"
-            echo "$row" >> README.md
-          done
-
-      - name: Commit and push changes
-        run: |
-          git config --global user.name "github-actions"
-          git config --global user.email "github-actions@github.com"
-          git add README.md
+          # 动态构建表格内容
+          TABLE="| Node.js | do...while | while | for | map | reduce | filter | forEach | for...of | for...in |\n"
+          TABLE+="|---|---|---|---|---|---|---|---|---|---|\n"
           
-          if git diff --staged --quiet; then
-            echo "No changes to commit. Exiting..."
-            exit 0
+          # 遍历下载的所有结果目录
+          for dir in all-results/results-*; do
+            version=$(basename $dir | sed 's/results-//')
+            file="$dir/results-$version.txt"
+            
+            if [ -f "$file" ]; then
+              # 使用 declare 创建关联数组解析 key:value
+              declare -A results
+              while IFS=: read -r key value; do
+                results[$(echo $key | xargs)]=$(echo $value | xargs)
+              done < "$file"
+              
+              row="| $version | ${results[do...while]} | ${results[while]} | ${results[for]} | ${results[map]} | ${results[reduce]} | ${results[filter]} | ${results[forEach]} | ${results[for...of]} | ${results[for...in]} |"
+              TABLE+="$row\n"
+              unset results
+            fi
+          done
+          
+          # 使用环境变量写入，避免多行字符串导致的转义问题
+          echo "PERF_TABLE<<EOF" >> $GITHUB_ENV
+          echo -e "$TABLE" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: Update README.md
+        run: |
+          # 如果 README 里没有标记，就先初始化它们
+          if ! grep -q "" README.md; then
+            echo -e "\n## Performance Results\n\n" >> README.md
           fi
           
-          git commit -m "Update README with latest loop performance results [skip ci]"
+          # 使用 sed 替换两个标记之间的内容
+          # 先提取标记前后的内容，重新组合
+          sed -i '//,//{//!d;}' README.md
+          sed -i '//a '"$PERF_TABLE"'' README.md
+
+      - name: Commit and push
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          git commit -m "docs: update performance results [skip ci]" || echo "No changes"
           git push
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
