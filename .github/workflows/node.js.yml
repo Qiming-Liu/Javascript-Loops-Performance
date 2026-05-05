@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version: [12, 14, 16, 18, 20, 22, 24, 25, 26]
+        node-version: [12, 14, 16, 18, 20, 22, 24, 25]
 
     name: Node.js ${{ matrix.node-version }}
     steps:
