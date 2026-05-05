@@ -79,15 +79,22 @@ jobs:
 
       - name: Update README.md
         run: |
-          # 如果 README 里没有标记，就先初始化它们
+          # 1. 确保标记存在
           if ! grep -q "" README.md; then
             echo -e "\n## Performance Results\n\n" >> README.md
           fi
-          
-          # 使用 sed 替换两个标记之间的内容
-          # 先提取标记前后的内容，重新组合
+
+          # 2. 将环境变量中的表格内容写入临时文件
+          echo -e "$PERF_TABLE" > table.tmp
+
+          # 3. 使用 sed 的 r (read) 指令将内容插入标记之间
+          # 先删除标记中间的旧内容
           sed -i '//,//{//!d;}' README.md
-          sed -i '//a '"$PERF_TABLE"'' README.md
+          # 在 START_TABLE 之后读入临时文件的内容
+          sed -i '//r table.tmp' README.md
+          
+          # 4. 清理临时文件
+          rm table.tmp
 
       - name: Commit and push
         run: |
