@@ -3,8 +3,6 @@ name: Update README with Performance Test Results
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -12,94 +10,81 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
+        # 只保留已发布的稳定版本
         node-version: [12, 14, 16, 18, 20, 22, 24, 25]
 
-    name: Node.js ${{ matrix.node-version }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
 
-      - name: Run test
+      - name: Run Test
         run: |
           node test-loops.js
-          mv performance-results.txt results-${{ matrix.node-version }}.txt
+          # 假设输出文件为 performance-results.txt，重命名以防冲突
+          mv performance-results.txt result-${{ matrix.node-version }}.txt
 
-      - name: Upload results
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: results-${{ matrix.node-version }}
-          path: results-${{ matrix.node-version }}.txt
+          path: result-${{ matrix.node-version }}.txt
 
   update-readme:
     runs-on: ubuntu-latest
     needs: run-performance-test
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Download all results
+      - uses: actions/checkout@v4
+      
+      - name: Download Results
         uses: actions/download-artifact@v4
         with:
           path: all-results
 
-      - name: Generate Markdown Table
-        id: table-gen
+      - name: Process Data and Update README
+        shell: python
         run: |
-          # 动态构建表格内容
-          TABLE="| Node.js | do...while | while | for | map | reduce | filter | forEach | for...of | for...in |\n"
-          TABLE+="|---|---|---|---|---|---|---|---|---|---|\n"
+          import os, re
+
+          # 1. 扫描所有结果文件并解析
+          results_map = {}
+          metrics = ["do...while", "while", "for", "map", "reduce", "filter", "forEach", "for...of", "for...in"]
+          base_path = "all-results"
           
-          # 遍历下载的所有结果目录
-          for dir in all-results/results-*; do
-            version=$(basename $dir | sed 's/results-//')
-            file="$dir/results-$version.txt"
-            
-            if [ -f "$file" ]; then
-              # 使用 declare 创建关联数组解析 key:value
-              declare -A results
-              while IFS=: read -r key value; do
-                results[$(echo $key | xargs)]=$(echo $value | xargs)
-              done < "$file"
-              
-              row="| $version | ${results[do...while]} | ${results[while]} | ${results[for]} | ${results[map]} | ${results[reduce]} | ${results[filter]} | ${results[forEach]} | ${results[for...of]} | ${results[for...in]} |"
-              TABLE+="$row\n"
-              unset results
-            fi
-          done
+          for folder in sorted(os.listdir(base_path)):
+              file_path = os.path.join(base_path, folder, folder.replace("results-", "result-") + ".txt")
+              if os.path.exists(file_path):
+                  v = folder.split("-")[1]
+                  with open(file_path, "r") as f:
+                      # 兼容 "key: value" 或 "key, value" 格式
+                      data = dict(line.replace(":", ",").split(",") for line in f if "," in line or ":" in line)
+                      results_map[v] = [data.get(m, "N/A").strip() for m in metrics]
+
+          # 2. 生成 Markdown 表格
+          header = "| Node.js | " + " | ".join(metrics) + " |\n"
+          separator = "|---" * (len(metrics) + 1) + "|\n"
+          rows = ""
+          for ver in sorted(results_map.keys(), key=int):
+              rows += f"| {ver} | " + " | ".join(results_map[ver]) + " |\n"
           
-          # 使用环境变量写入，避免多行字符串导致的转义问题
-          echo "PERF_TABLE<<EOF" >> $GITHUB_ENV
-          echo -e "$TABLE" >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
+          table_content = f"\n{header}{separator}{rows}"
 
-      - name: Update README.md
-        run: |
-          # 1. 确保标记存在
-          if ! grep -q "" README.md; then
-            echo -e "\n## Performance Results\n\n" >> README.md
-          fi
-
-          # 2. 将环境变量中的表格内容写入临时文件
-          echo -e "$PERF_TABLE" > table.tmp
-
-          # 3. 使用 sed 的 r (read) 指令将内容插入标记之间
-          # 先删除标记中间的旧内容
-          sed -i '//,//{//!d;}' README.md
-          # 在 START_TABLE 之后读入临时文件的内容
-          sed -i '//r table.tmp' README.md
+          # 3. 写入 README
+          readme_file = "README.md"
+          content = open(readme_file, "r").read() if os.path.exists(readme_file) else "## Performance\n\n\n"
           
-          # 4. 清理临时文件
-          rm table.tmp
+          if "" in content:
+              new_content = re.sub(r".*?", table_content, content, flags=re.DOTALL)
+          else:
+              new_content = content + "\n\n" + table_content
+          
+          with open(readme_file, "w") as f:
+              f.write(new_content)
 
-      - name: Commit and push
+      - name: Commit and Push
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add README.md
-          git commit -m "docs: update performance results [skip ci]" || echo "No changes"
+          git commit -m "docs: update performance results [skip ci]" || exit 0
           git push
