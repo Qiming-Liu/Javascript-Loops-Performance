@@ -10,7 +10,6 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        # 只保留已发布的稳定版本
         node-version: [12, 14, 16, 18, 20, 22, 24, 25]
 
     steps:
@@ -22,7 +21,6 @@ jobs:
       - name: Run Test
         run: |
           node test-loops.js
-          # 假设输出文件为 performance-results.txt，重命名以防冲突
           mv performance-results.txt result-${{ matrix.node-version }}.txt
 
       - uses: actions/upload-artifact@v4
@@ -41,50 +39,55 @@ jobs:
         with:
           path: all-results
 
-      - name: Process Data and Update README
+      - name: Overwrite README with New Table
         shell: python
         run: |
-          import os, re
+          import os
 
-          # 1. 扫描所有结果文件并解析
+          # 1. 采集所有已下载的版本数据
           results_map = {}
           metrics = ["do...while", "while", "for", "map", "reduce", "filter", "forEach", "for...of", "for...in"]
           base_path = "all-results"
           
-          for folder in sorted(os.listdir(base_path)):
-              file_path = os.path.join(base_path, folder, folder.replace("results-", "result-") + ".txt")
+          # 遍历所有下载的 artifact 目录
+          for folder in os.listdir(base_path):
+              version = folder.replace("results-", "")
+              file_path = os.path.join(base_path, folder, f"result-{version}.txt")
               if os.path.exists(file_path):
-                  v = folder.split("-")[1]
                   with open(file_path, "r") as f:
-                      # 兼容 "key: value" 或 "key, value" 格式
-                      data = dict(line.replace(":", ",").split(",") for line in f if "," in line or ":" in line)
-                      results_map[v] = [data.get(m, "N/A").strip() for m in metrics]
+                      # 兼容冒号或逗号分隔符，提取 key 和 value
+                      data = {}
+                      for line in f:
+                          if ":" in line or "," in line:
+                              parts = line.replace(":", ",").split(",")
+                              if len(parts) >= 2:
+                                  data[parts[0].strip()] = parts[1].strip()
+                      results_map[version] = [data.get(m, "N/A") for m in metrics]
 
-          # 2. 生成 Markdown 表格
+          # 2. 生成全新的 Markdown 内容
+          title = "# JavaScript Loop Performance Test Results\n\n"
+          description = "> 测试单位: 毫秒 (ms)，数值越低性能越好。每次测试由 GitHub Actions 自动生成并覆盖此文件。\n\n"
+          
           header = "| Node.js | " + " | ".join(metrics) + " |\n"
-          separator = "|---" * (len(metrics) + 1) + "|\n"
+          sep = "|---| " + "---| " * len(metrics) + "\n"
+          
           rows = ""
-          for ver in sorted(results_map.keys(), key=int):
-              rows += f"| {ver} | " + " | ".join(results_map[ver]) + " |\n"
+          # 按 Node 版本数值大小排序
+          sorted_versions = sorted(results_map.keys(), key=lambda x: int(x))
+          for v in sorted_versions:
+              rows += f"| {v} | " + " | ".join(results_map[v]) + " |\n"
           
-          table_content = f"\n{header}{separator}{rows}"
+          full_content = title + description + header + sep + rows
 
-          # 3. 写入 README
-          readme_file = "README.md"
-          content = open(readme_file, "r").read() if os.path.exists(readme_file) else "## Performance\n\n\n"
-          
-          if "" in content:
-              new_content = re.sub(r".*?", table_content, content, flags=re.DOTALL)
-          else:
-              new_content = content + "\n\n" + table_content
-          
-          with open(readme_file, "w") as f:
-              f.write(new_content)
+          # 3. 彻底覆盖写入 README.md ("w" 模式会删除文件原内容)
+          with open("README.md", "w", encoding="utf-8") as f:
+              f.write(full_content)
 
       - name: Commit and Push
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add README.md
-          git commit -m "docs: update performance results [skip ci]" || exit 0
+          # 即使内容没变也不报错
+          git commit -m "docs: complete rewrite of README with latest results" || exit 0
           git push
